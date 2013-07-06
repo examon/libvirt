@@ -2222,6 +2222,33 @@ vshDebug(vshControl *ctl, int level, const char *format, ...)
     VIR_FREE(str);
 }
 
+static const vshCmdDef *
+vshDetermineCommandName(void)
+{
+    const vshCmdDef *cmd = NULL;
+    char *p;
+    char *cmdname;
+
+    if (!(p = strchr(rl_line_buffer, ' ')))
+        return NULL;
+
+    cmdname = vshCalloc(NULL, (p - rl_line_buffer) + 1, 1);
+    memcpy(cmdname, rl_line_buffer, p - rl_line_buffer);
+
+    cmd = vshCmddefSearch(cmdname);
+    VIR_FREE(cmdname);
+
+    return cmd;
+}
+
+char **
+vshDomainCompleter(const vshCmdDef *cmd ATTRIBUTE_UNUSED,
+                   const char *cmdname ATTRIBUTE_UNUSED)
+{
+    /* TODO */
+    return (char **)NULL;
+}
+
 void
 vshPrintExtra(vshControl *ctl, const char *format, ...)
 {
@@ -2605,21 +2632,89 @@ vshReadlineOptionsGenerator(const char *text, int state)
     return NULL;
 }
 
+static char *
+vshReadlineCommandCompletionGenerator(const char *text, int state)
+{
+    static int list_index, len;
+    static const vshCmdDef *cmd = NULL;
+    const char *name;
+
+    if (!state) {
+        cmd = vshDetermineCommandName();
+        list_index = 0;
+        len = strlen(text);
+    }
+
+    if (!cmd)
+        return NULL;
+
+    if (!cmd->completer)
+        return NULL;
+
+    /* TODO: Get list from the cmd->completer, e.g. vshDomainCompleter. */
+    const char *completed_names[] = {"Fedora", "F19", "ubuntu", NULL};
+
+    while ((name = completed_names[list_index])) {
+        char *res;
+        list_index++;
+
+        if (STRNEQLEN(name, text, len))
+            /* Skip irrelevant names */
+            continue;
+
+        res = vshMalloc(NULL, strlen(name) + 1);
+        snprintf(res, strlen(name) + 1, "%s", name);
+        return res;
+    }
+
+    /* If no names matched, then return NULL. */
+    return NULL;
+}
+
+static unsigned int
+vshReadlineCompletedWords(void)
+{
+    char c;
+    unsigned int i = 0;
+    unsigned int words = 0;
+
+    while ((c = rl_line_buffer[i++]))
+        if (c == ' ')
+            words++;
+
+    return words;
+}
+
 static char **
 vshReadlineCompletion(const char *text, int start,
                       int end ATTRIBUTE_UNUSED)
 {
+    static bool cmd_completed = false;
+    const unsigned int completed_words = vshReadlineCompletedWords();
     char **matches = (char **) NULL;
 
-    if (start == 0)
-        /* command name generator */
+    /* Do not perform default filename completion. */
+    rl_attempted_completion_over = 1;
+
+    if (start == 0) {
+        /* Command name generator */
         matches = rl_completion_matches(text, vshReadlineCommandGenerator);
-    else
-        /* commands options */
+    } else if (completed_words == 1 && !cmd_completed) {
+        /* Command completion generator */
+        matches = rl_completion_matches(text, vshReadlineCommandCompletionGenerator);
+        cmd_completed = (matches ? true : false);
+        if (!matches)
+            /* Generate commands options now,
+             * because command does not have any completions */
+            matches = rl_completion_matches(text, vshReadlineOptionsGenerator);
+    } else if (completed_words > 1) {
+        /* Commands options generator */
         matches = rl_completion_matches(text, vshReadlineOptionsGenerator);
+    }
+    cmd_completed = false;
+
     return matches;
 }
-
 
 static int
 vshReadlineInit(vshControl *ctl)

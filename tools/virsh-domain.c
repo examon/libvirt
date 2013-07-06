@@ -10674,6 +10674,7 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdStart,
      .opts = opts_start,
      .info = info_start,
+     .completer = vshDomainCompleter,
      .flags = 0
     },
     {.name = "suspend",
