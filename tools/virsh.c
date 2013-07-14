@@ -2243,8 +2243,7 @@ vshDetermineCommandName(void)
 }
 
 char **
-vshDomainCompleter(const vshCmdDef *cmd ATTRIBUTE_UNUSED,
-                   unsigned int flags)
+vshDomainCompleter(unsigned int flags)
 {
     virDomainPtr *domains;
     size_t i;
@@ -2686,7 +2685,7 @@ vshReadlineCommandCompletionGenerator(const char *text, int state)
     if (!cmd->completer)
         return NULL;
 
-    completed_names = cmd->completer(cmd, cmd->completer_flags);
+    completed_names = cmd->completer(cmd->completer_flags);
 
     if (!completed_names)
         return NULL;
