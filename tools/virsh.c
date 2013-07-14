@@ -88,6 +88,8 @@ static char *progname;
 
 static const vshCmdGrp cmdGroups[];
 
+virConnectPtr *__my_conn;
+
 /* Bypass header poison */
 #undef strdup
 
@@ -197,7 +199,6 @@ vshStringToArray(const char *str,
     }
 
     if (VIR_ALLOC_N(arr, nstr_tokens) < 0) {
-        virReportOOMError();
         VIR_FREE(str_copied);
         return -1;
     }
@@ -587,7 +588,7 @@ vshTreePrintInternal(vshControl *ctl,
                      bool root,
                      virBufferPtr indent)
 {
-    int i;
+    size_t i;
     int nextlastdev = -1;
     int ret = -1;
     const char *dev = (lookup)(devid, false, opaque);
@@ -990,7 +991,7 @@ static int
 vshCmddefOptParse(const vshCmdDef *cmd, uint32_t *opts_need_arg,
                   uint32_t *opts_required)
 {
-    int i;
+    size_t i;
     bool optional = false;
 
     *opts_need_arg = 0;
@@ -1010,7 +1011,7 @@ vshCmddefOptParse(const vshCmdDef *cmd, uint32_t *opts_need_arg,
             continue;
         }
         if (opt->type == VSH_OT_ALIAS) {
-            int j;
+            size_t j;
             if (opt->flags || !opt->help)
                 return -1; /* alias options are tracked by the original name */
             for (j = i + 1; cmd->opts[j].name; j++) {
@@ -1051,7 +1052,7 @@ static const vshCmdOptDef *
 vshCmddefGetOption(vshControl *ctl, const vshCmdDef *cmd, const char *name,
                    uint32_t *opts_seen, int *opt_index)
 {
-    int i;
+    size_t i;
 
     if (STREQ(name, helpopt.name)) {
         return &helpopt;
@@ -1086,7 +1087,7 @@ static const vshCmdOptDef *
 vshCmddefGetData(const vshCmdDef *cmd, uint32_t *opts_need_arg,
                  uint32_t *opts_seen)
 {
-    int i;
+    size_t i;
     const vshCmdOptDef *opt;
 
     if (!*opts_need_arg)
@@ -1109,7 +1110,7 @@ vshCommandCheckOpts(vshControl *ctl, const vshCmd *cmd, uint32_t opts_required,
                     uint32_t opts_seen)
 {
     const vshCmdDef *def = cmd->def;
-    int i;
+    size_t i;
 
     opts_required &= ~opts_seen;
     if (!opts_required)
@@ -2243,10 +2244,43 @@ vshDetermineCommandName(void)
 
 char **
 vshDomainCompleter(const vshCmdDef *cmd ATTRIBUTE_UNUSED,
-                   const char *cmdname ATTRIBUTE_UNUSED)
+                   unsigned int flags)
 {
-    /* TODO */
-    return (char **)NULL;
+    virDomainPtr *domains;
+    size_t i;
+    char **names = NULL;
+    int ndomains;
+
+    if (!*__my_conn)
+        return NULL;
+
+    ndomains = virConnectListAllDomains(*__my_conn, &domains, flags);
+
+    if (ndomains < 0)
+        return NULL;
+
+    names = vshMalloc(NULL, sizeof(char *) * (ndomains + 1));
+
+    if (!names)
+        return NULL;
+
+    for (i = 0; i < ndomains; i++) {
+        char *name = (char *)virDomainGetName(domains[i]);
+        names[i] = vshMalloc(NULL, strlen(name));
+        if (!names[i])
+            goto cleanup;
+        snprintf(names[i], sizeof(name), "%s", name);
+        virDomainFree(domains[i]);
+    }
+    names[i] = NULL;
+    VIR_FREE(domains);
+    return names;
+
+cleanup:
+    for (i = 0; names[i]; i++)
+        VIR_FREE(names[i]);
+    VIR_FREE(names);
+    return NULL;
 }
 
 void
@@ -2637,7 +2671,8 @@ vshReadlineCommandCompletionGenerator(const char *text, int state)
 {
     static int list_index, len;
     static const vshCmdDef *cmd = NULL;
-    const char *name;
+    char **completed_names = NULL;
+    char *name;
 
     if (!state) {
         cmd = vshDetermineCommandName();
@@ -2651,8 +2686,10 @@ vshReadlineCommandCompletionGenerator(const char *text, int state)
     if (!cmd->completer)
         return NULL;
 
-    /* TODO: Get list from the cmd->completer, e.g. vshDomainCompleter. */
-    const char *completed_names[] = {"Fedora", "F19", "ubuntu", NULL};
+    completed_names = cmd->completer(cmd, cmd->completer_flags);
+
+    if (!completed_names)
+        return NULL;
 
     while ((name = completed_names[list_index])) {
         char *res;
@@ -2664,8 +2701,10 @@ vshReadlineCommandCompletionGenerator(const char *text, int state)
 
         res = vshMalloc(NULL, strlen(name) + 1);
         snprintf(res, strlen(name) + 1, "%s", name);
+        VIR_FREE(name);
         return res;
     }
+    VIR_FREE(completed_names);
 
     /* If no names matched, then return NULL. */
     return NULL;
@@ -2675,7 +2714,7 @@ static unsigned int
 vshReadlineCompletedWords(void)
 {
     char c;
-    unsigned int i = 0;
+    size_t i = 0;
     unsigned int words = 0;
 
     while ((c = rl_line_buffer[i++]))
@@ -2692,9 +2731,6 @@ vshReadlineCompletion(const char *text, int start,
     static bool cmd_completed = false;
     const unsigned int completed_words = vshReadlineCompletedWords();
     char **matches = (char **) NULL;
-
-    /* Do not perform default filename completion. */
-    rl_attempted_completion_over = 1;
 
     if (start == 0) {
         /* Command name generator */
@@ -3068,7 +3104,8 @@ vshAllowedEscapeChar(char c)
 static bool
 vshParseArgv(vshControl *ctl, int argc, char **argv)
 {
-    int arg, len, debug, i;
+    int arg, len, debug;
+    size_t i;
     int longindex = -1;
     struct option opt[] = {
         {"debug", required_argument, NULL, 'd'},
@@ -3253,6 +3290,7 @@ main(int argc, char **argv)
     ctl->debug = VSH_DEBUG_DEFAULT;
     ctl->escapeChar = "^]";     /* Same default as telnet */
 
+    __my_conn = &ctl->conn;
 
     if (!setlocale(LC_ALL, "")) {
         perror("setlocale");
@@ -3313,6 +3351,9 @@ main(int argc, char **argv)
             vshDeinit(ctl);
             exit(EXIT_FAILURE);
         }
+
+        /* Need to connect at the start because of the auto completion. */
+        vshReconnect(ctl);
 
         do {
             const char *prompt = ctl->readonly ? VSH_PROMPT_RO : VSH_PROMPT_RW;

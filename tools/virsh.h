@@ -146,8 +146,7 @@ typedef struct _vshCmdOptDef vshCmdOptDef;
 typedef struct _vshControl vshControl;
 typedef struct _vshCtrlData vshCtrlData;
 
-typedef char ** (*vshCmdCompleter)
-    (const vshCmdDef *cmd, const char *cmdname);
+typedef char **(*vshCmdCompleter)(const vshCmdDef *cmd, unsigned int flags);
 
 /*
  * vshCmdInfo -- name/value pair for information about command
@@ -201,6 +200,7 @@ struct _vshCmdDef {
     const vshCmdOptDef *opts;   /* definition of command options */
     const vshCmdInfo *info;     /* details about command */
     vshCmdCompleter completer;  /* command completer */
+    unsigned int completer_flags;   /* command completer flags */
     unsigned int flags;         /* bitwise OR of VSH_CMD_FLAG */
 };
 
@@ -251,7 +251,7 @@ struct _vshCmdGrp {
     const vshCmdDef *commands;
 };
 
-char **vshDomainCompleter(const vshCmdDef *cmd, const char *cmdname);
+char **vshDomainCompleter(const vshCmdDef *cmd, unsigned int flags);
 
 void vshError(vshControl *ctl, const char *format, ...)
     ATTRIBUTE_FMT_PRINTF(2, 3);
