@@ -2620,20 +2620,9 @@ vshReadlineOptionsGenerator(const char *text, int state)
     const char *name;
 
     if (!state) {
-        /* determine command name */
-        char *p;
-        char *cmdname;
-
-        if (!(p = strchr(rl_line_buffer, ' ')))
-            return NULL;
-
-        cmdname = vshCalloc(NULL, (p - rl_line_buffer) + 1, 1);
-        memcpy(cmdname, rl_line_buffer, p - rl_line_buffer);
-
-        cmd = vshCmddefSearch(cmdname);
+        cmd = vshDetermineCommandName();
         list_index = 0;
         len = strlen(text);
-        VIR_FREE(cmdname);
     }
 
     if (!cmd)
@@ -2723,10 +2712,84 @@ vshReadlineCompletedWords(void)
     return words;
 }
 
+static char *
+vshLineBufferParser(void)
+{
+    /* TODO */
+    size_t grp_list_index, cmd_list_index, cmd_opt_list_index;
+    char *found_cmd = NULL;
+    char *found_cmd_opt = NULL;
+    const char *name;
+    const vshCmdGrp *grp;
+    const vshCmdDef *cmds;
+
+    /* Find command. */
+    grp_list_index = 0;
+    cmd_list_index = 0;
+    grp = cmdGroups;
+
+    while (grp[grp_list_index].name) {
+        cmds = grp[grp_list_index].commands;
+
+        if (cmds[cmd_list_index].name) {
+            while ((name = cmds[cmd_list_index].name)) {
+                cmd_list_index++;
+
+                if (strstr(rl_line_buffer, name) != NULL) {
+                    found_cmd = vshMalloc(NULL, strlen(name));
+                    memcpy(found_cmd, name, strlen(name));
+                }
+            }
+        } else {
+            cmd_list_index = 0;
+            grp_list_index++;
+        }
+    }
+
+    if (!found_cmd)
+        return NULL;
+
+    printf("\n>>>     found_cmd: %s\n", found_cmd);
+
+    /* Find command option. */
+    const vshCmdDef *cmd = vshCmddefSearch(found_cmd);
+
+    if (!cmd)
+        return NULL;
+
+    if (!cmd->opts)
+        return NULL;
+
+    cmd_opt_list_index = 0;
+
+    while ((name = cmd->opts[cmd_opt_list_index].name)) {
+        cmd_opt_list_index++;
+        char *mch;
+
+        if ((mch = strstr(rl_line_buffer, name))) {
+            found_cmd_opt = vshMalloc(NULL, strlen(name));
+            memcpy(found_cmd_opt, name, strlen(name));
+        }
+    }
+
+    if (!found_cmd_opt)
+        return NULL;
+
+    printf("\n>>> found_cmd_opt: %s\n", found_cmd_opt);
+
+/* cleanup */
+    VIR_FREE(found_cmd);
+    VIR_FREE(found_cmd_opt);
+
+    return NULL;
+}
+
 static char **
 vshReadlineCompletion(const char *text, int start,
                       int end ATTRIBUTE_UNUSED)
 {
+    vshLineBufferParser();
+
     static bool cmd_completed = false;
     const unsigned int completed_words = vshReadlineCompletedWords();
     char **matches = (char **) NULL;
