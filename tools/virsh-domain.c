@@ -10355,6 +10355,8 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdDestroy,
      .opts = opts_destroy,
      .info = info_destroy,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE,
      .flags = 0
     },
     {.name = "detach-device",

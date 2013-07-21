@@ -2265,10 +2265,10 @@ vshDomainCompleter(unsigned int flags)
 
     for (i = 0; i < ndomains; i++) {
         char *name = (char *)virDomainGetName(domains[i]);
-        names[i] = vshMalloc(NULL, strlen(name));
-        if (!names[i])
+        if (VIR_STRDUP(names[i], name) < 0) {
+            virDomainFree(domains[i]);
             goto cleanup;
-        snprintf(names[i], sizeof(name), "%s", name);
+        }
         virDomainFree(domains[i]);
     }
     names[i] = NULL;
@@ -2613,48 +2613,6 @@ vshReadlineCommandGenerator(const char *text, int state)
 }
 
 static char *
-vshReadlineOptionsGenerator(const char *text, int state)
-{
-    static int list_index, len;
-    static const vshCmdDef *cmd = NULL;
-    const char *name;
-
-    if (!state) {
-        cmd = vshDetermineCommandName();
-        list_index = 0;
-        len = strlen(text);
-    }
-
-    if (!cmd)
-        return NULL;
-
-    if (!cmd->opts)
-        return NULL;
-
-    while ((name = cmd->opts[list_index].name)) {
-        const vshCmdOptDef *opt = &cmd->opts[list_index];
-        char *res;
-
-        list_index++;
-
-        if (opt->type == VSH_OT_DATA || opt->type == VSH_OT_ARGV)
-            /* ignore non --option */
-            continue;
-
-        if (len > 2) {
-            if (STRNEQLEN(name, text + 2, len - 2))
-                continue;
-        }
-        res = vshMalloc(NULL, strlen(name) + 3);
-        snprintf(res, strlen(name) + 3,  "--%s", name);
-        return res;
-    }
-
-    /* If no names matched, then return NULL. */
-    return NULL;
-}
-
-static char *
 vshReadlineCommandCompletionGenerator(const char *text, int state)
 {
     static int list_index, len;
@@ -2698,22 +2656,73 @@ vshReadlineCommandCompletionGenerator(const char *text, int state)
     return NULL;
 }
 
-static unsigned int
-vshReadlineCompletedWords(void)
+static char *
+vshReadlineOptionsGenerator(const char *text, int state)
 {
-    char c;
-    size_t i = 0;
-    unsigned int words = 0;
+    static int list_index, len;
+    static const vshCmdDef *cmd = NULL;
+    const char *name;
 
-    while ((c = rl_line_buffer[i++]))
-        if (c == ' ')
-            words++;
+    if (!state) {
+        cmd = vshDetermineCommandName();
+        list_index = 0;
+        len = strlen(text);
+    }
 
-    return words;
+    if (!cmd)
+        return NULL;
+
+    if (!cmd->opts)
+        return NULL;
+
+    while ((name = cmd->opts[list_index].name)) {
+        const vshCmdOptDef *opt = &cmd->opts[list_index];
+        char *res;
+
+        list_index++;
+
+        if (opt->type == VSH_OT_DATA || opt->type == VSH_OT_ARGV)
+            /* ignore non --option */
+            continue;
+
+        if (len > 2) {
+            if (STRNEQLEN(name, text + 2, len - 2))
+                continue;
+        }
+        res = vshMalloc(NULL, strlen(name) + 3);
+        snprintf(res, strlen(name) + 3,  "--%s", name);
+        return res;
+    }
+
+    /* If no names matched, then return NULL. */
+    return NULL;
 }
 
+//*
 static char *
-vshCmdCompleted(void)
+vshReadlineOptionsCompletionGenerator(const char *text ATTRIBUTE_UNUSED,
+                 int state ATTRIBUTE_UNUSED)
+{
+    // TODO: this is only dummy
+    static bool returned = false;
+    char *res = NULL;
+
+    if (!returned) {
+        if (VIR_STRDUP(res, "foo bar") < 0)
+            return NULL;
+        returned = true;
+        return res;
+    }
+    return NULL;
+}
+//*/
+
+/**********************************
+ * Current rl_line_buffer status *
+ **********************************/
+
+static char *
+vshCurrentCmd(void)
 {
     size_t grp_list_index, cmd_list_index;
     char *found_cmd = NULL;
@@ -2733,8 +2742,10 @@ vshCmdCompleted(void)
                 cmd_list_index++;
 
                 if (strstr(rl_line_buffer, name) != NULL) {
-                    found_cmd = vshMalloc(NULL, strlen(name));
-                    memcpy(found_cmd, name, strlen(name));
+                    //found_cmd = vshMalloc(NULL, strlen(name));
+                    //memcpy(found_cmd, name, strlen(name));
+                    if (VIR_STRDUP(found_cmd, name) < 0)
+                        return NULL;
                 }
             }
         } else {
@@ -2749,12 +2760,49 @@ vshCmdCompleted(void)
     return found_cmd;
 }
 
+static char*
+vshCurrentCmdCom(const char *cmd_name)
+{
+    const vshCmdDef *cmd = NULL;
+    char **completed_names = NULL;
+    char *found_cmd_com = NULL;
+
+    if (!cmd_name)
+        return NULL;
+
+    cmd = vshCmddefSearch(cmd_name);
+
+    if (!cmd)
+        return NULL;
+
+    if (!cmd->completer)
+        return NULL;
+
+    completed_names = cmd->completer(cmd->completer_flags);
+
+    if (!completed_names)
+        return NULL;
+
+    size_t i;
+    for (i = 0; completed_names[i]; i++) {
+        if (strstr(rl_line_buffer, completed_names[i])) {
+            if (VIR_STRDUP(found_cmd_com, completed_names[i]) < 0)
+                return NULL;
+        }
+    }
+
+    if (!found_cmd_com)
+        return NULL;
+
+    return found_cmd_com;
+}
+
 static char *
-vshCmdOptCompleted(const char *cmd)
+vshCurrentOpt(const char *cmd)
 {
     size_t cmd_opt_list_index;
     const vshCmdDef *cmd_def = NULL;
-    char *found_cmd_opt = NULL;
+    char *found_opt = NULL;
     const char *name;
 
     if (!cmd)
@@ -2774,94 +2822,130 @@ vshCmdOptCompleted(const char *cmd)
         cmd_opt_list_index++;
 
         if (strstr(rl_line_buffer, name)) {
-            found_cmd_opt = vshMalloc(NULL, strlen(name));
-            memcpy(found_cmd_opt, name, strlen(name));
+            if (VIR_STRDUP(found_opt, name) < 0)
+                return NULL;
         }
     }
 
-    if (!found_cmd_opt)
+    if (!found_opt)
         return NULL;
 
-    return found_cmd_opt;
+    return found_opt;
 }
 
-static char**
-vshCmdComCompleted(const char *cmd_name)
+static char *
+vshCurrentOptCom(const char *opt)
 {
-    const vshCmdDef *cmd = NULL;
-    char **completed_names = NULL;
+    // TODO: this is dummy
+    const char *completed_names[] = {"foo bar", "bar foo", NULL};
+    char *found_opt_com = NULL;
 
-    if (!cmd_name)
+    if (!opt)
         return NULL;
 
-    cmd = vshCmddefSearch(cmd_name);
-
-    if (!cmd)
-        return NULL;
-
-    if (!cmd->completer)
-        return NULL;
-
-    completed_names = cmd->completer(cmd->completer_flags);
-
-    if (!completed_names)
-        return NULL;
-
-/*
     size_t i;
-    for (i = 0; completed_names[i]; i++)
-        printf("> completed_names[%ld]: %s\n", i, completed_names[i]);
-*/
-    return completed_names;
+    for (i = 0; completed_names[i]; i++) {
+        if (strstr(rl_line_buffer, completed_names[i])) {
+            if (VIR_STRDUP(found_opt_com, completed_names[i]) < 0)
+                return NULL;
+        }
+    }
+
+    if (!found_opt_com)
+        return NULL;
+
+    return found_opt_com;
 }
 
+
+/* Don't need this atm.
+static unsigned int
+vshReadlineCompletedWords(void)
+{
+    char c;
+    size_t i = 0;
+    unsigned int words = 0;
+
+    while ((c = rl_line_buffer[i++]))
+        if (c == ' ')
+            words++;
+
+    return words;
+}
+*/
+
+/****************************
+ * Main read line function. *
+ ****************************/
 
 static char **
-vshReadlineCompletion(const char *text, int start,
+vshReadlineCompletion(const char *text, int start ATTRIBUTE_UNUSED,
                       int end ATTRIBUTE_UNUSED)
 {
-    const char *cmd ATTRIBUTE_UNUSED = vshCmdCompleted();
-    char **cmd_com ATTRIBUTE_UNUSED = vshCmdComCompleted(cmd);
-    const char *cmd_opt ATTRIBUTE_UNUSED = vshCmdOptCompleted(cmd);
-    const char *cmd_opt_com ATTRIBUTE_UNUSED = NULL;
+    const char *cmd = vshCurrentCmd();
+    const char *cmd_com = vshCurrentCmdCom(cmd);
+    const char *opt = vshCurrentOpt(cmd);
+    const char *opt_com = vshCurrentOptCom(opt);
 
+    // debug
     printf("\n>         cmd: %s"
+           "\n>     cmd_com: %s"
            "\n>     cmd_opt: %s"
            "\n> cmd_opt_com: %s\n",
-           cmd, cmd_opt, cmd_opt_com);
-    if (cmd_com) {
-        size_t i;
-        for (i = 0; cmd_com[i]; i++)
-            printf(">  cmd_com[%ld]: %s\n", i, cmd_com[i]);
-    } else {
-        printf(">    cmd_com: (null)\n");
-    }
+           cmd, cmd_com, opt, opt_com);
 
-
-    static bool cmd_completed = false;
-    const unsigned int completed_words = vshReadlineCompletedWords();
+    //static bool cmd_completed = false;
+    //const unsigned int completed_words = vshReadlineCompletedWords();
     char **matches = (char **)NULL;
 
-    if (start == 0) {
-        /* Command name generator */
+    // new stuff
+    if (!cmd) {
         matches = rl_completion_matches(text, vshReadlineCommandGenerator);
+    } else {
+        if (!cmd_com) {
+            matches = rl_completion_matches(text, vshReadlineCommandCompletionGenerator);
+        } else {
+            if (!opt) {
+                matches = rl_completion_matches(text, vshReadlineOptionsGenerator);
+            } else {
+                if (!opt_com) {
+                    matches = rl_completion_matches(text, vshReadlineOptionsCompletionGenerator);
+                }
+            }
+        }
+
+        // TODO
+    }
+
+
+/* old stuff ^^
+    if (start == 0) {
+        // Command name generator
+        matches = rl_completion_matches(text, vshReadlineCommandGenerator);
+        printf("\n# if\n");
     } else if (completed_words == 1 && !cmd_completed) {
-        /* Command completion generator */
+        // Command completion generator
         matches = rl_completion_matches(text, vshReadlineCommandCompletionGenerator);
+        printf("\n# else if 1\n");
         cmd_completed = (matches ? true : false);
-        if (!matches)
-            /* Generate commands options now,
-             * because command does not have any completions */
+        if (!matches) {
+            // Generate commands options now,
+            // because command does not have any completions
             matches = rl_completion_matches(text, vshReadlineOptionsGenerator);
+            printf("\n# else if 1 - if\n");
+        }
     } else if (completed_words > 1) {
-        /* Commands options generator */
+        // Commands options generator
         matches = rl_completion_matches(text, vshReadlineOptionsGenerator);
+        printf("\n# else if 2\n");
     }
     cmd_completed = false;
+*/
 
     VIR_FREE(cmd);
     VIR_FREE(cmd_com);
-    VIR_FREE(cmd_opt);
+    VIR_FREE(opt);
+    VIR_FREE(opt_com);
 
     return matches;
 }
