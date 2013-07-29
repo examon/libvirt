@@ -2283,23 +2283,23 @@ cleanup:
 }
 
 char **
-vshTestOptCompleter(void)
+vshDomPmSuspendTargetCompleter(void)
 {
-    /* This is only testing function */
-    const char *dummy[] = {"foo bar", "jane doe", "sentinel", NULL};
+    const char *targets[] = {"mem", "disk", "hybrid"};
+    const unsigned int targets_size = sizeof(targets)/sizeof(targets[0]);
     char **names = NULL;
     size_t i;
 
-    names = vshMalloc(NULL, sizeof(char *) * 4);
+    names = vshMalloc(NULL, sizeof(char *) * (targets_size + 1));
 
     if (!names)
         return NULL;
 
-    for (i = 0; dummy[i]; i++) {
-        char *name = (char *)dummy[i];
-        if (VIR_STRDUP(names[i], name) < 0)
+    for (i = 0; i < targets_size; i++) {
+        if (VIR_STRDUP(names[i], targets[i]) < 0)
             goto cleanup;
     }
+
     names[i] = NULL;
     return names;
 
@@ -2308,7 +2308,34 @@ cleanup:
         VIR_FREE(names[i]);
     VIR_FREE(names);
     return NULL;
+}
 
+char **
+vshRebootShutdownModeCompleter(void)
+{
+    const char *modes[] = {"acpi", "agent", "initctl", "signal"};
+    const unsigned int modes_size = sizeof(modes)/sizeof(modes[0]);
+    char **names = NULL;
+    size_t i;
+
+    names = vshMalloc(NULL, sizeof(char *) * (modes_size + 1));
+
+    if (!names)
+        return NULL;
+
+    for (i = 0; i < modes_size; i++) {
+        if (VIR_STRDUP(names[i], modes[i]) < 0)
+            goto cleanup;
+    }
+
+    names[i] = NULL;
+    return names;
+
+cleanup:
+    for (i = 0; names[i]; i++)
+        VIR_FREE(names[i]);
+    VIR_FREE(names);
+    return NULL;
 }
 
 void
@@ -2799,6 +2826,8 @@ vshCurrentCmd(void)
     const vshCmdDef *cmds;
     size_t grp_list_index, cmd_list_index;
     char *found_cmd = NULL;
+    char *rl_copy = NULL;
+    char *pch;
 
     grp_list_index = 0;
     cmd_list_index = 0;
@@ -2811,9 +2840,17 @@ vshCurrentCmd(void)
             while ((name = cmds[cmd_list_index].name)) {
                 cmd_list_index++;
 
-                if (strstr(rl_line_buffer, name) != NULL)
-                    if (VIR_STRDUP(found_cmd, name) < 0)
-                        return NULL;
+                if (VIR_STRDUP(rl_copy, rl_line_buffer) < 0)
+                    return NULL;
+
+                pch = strtok(rl_copy, " ");
+
+                while (pch != NULL) {
+                    if (STREQ(pch, name))
+                        if (VIR_STRDUP(found_cmd, name) < 0)
+                            goto cleanup;
+                    pch = strtok(NULL, " ");
+                }
             }
         } else {
             cmd_list_index = 0;
@@ -2822,9 +2859,14 @@ vshCurrentCmd(void)
     }
 
     if (!found_cmd)
-        return NULL;
+        goto cleanup;
 
     return found_cmd;
+
+cleanup:
+    if (rl_copy)
+        VIR_FREE(rl_copy);
+    return NULL;
 }
 
 static char*

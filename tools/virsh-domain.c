@@ -2752,7 +2752,8 @@ static const vshCmdOptDef opts_dom_pm_suspend[] = {
      .flags = VSH_OFLAG_REQ,
      .help = N_("mem(Suspend-to-RAM), "
                 "disk(Suspend-to-Disk), "
-                "hybrid(Hybrid-Suspend)")
+                "hybrid(Hybrid-Suspend)"),
+     .completer = vshDomPmSuspendTargetCompleter
     },
     {.name = NULL}
 };
@@ -3242,8 +3243,7 @@ static const vshCmdOptDef opts_start[] = {
 #endif
     {.name = "paused",
      .type = VSH_OT_BOOL,
-     .help = N_("leave the guest paused after creation"),
-     .completer = vshTestOptCompleter
+     .help = N_("leave the guest paused after creation")
     },
     {.name = "autodestroy",
      .type = VSH_OT_BOOL,
@@ -3257,8 +3257,60 @@ static const vshCmdOptDef opts_start[] = {
      .type = VSH_OT_BOOL,
      .help = N_("force fresh boot by discarding any managed save")
     },
+    {.name = "pass-fds",
+     .type = VSH_OT_STRING,
+     .help = N_("pass file descriptors N,M,... to the guest")
+    },
     {.name = NULL}
 };
+
+static int
+cmdStartGetFDs(vshControl *ctl,
+               const vshCmd *cmd,
+               size_t *nfdsret,
+               int **fdsret)
+{
+    const char *fdopt;
+    char **fdlist = NULL;
+    int *fds = NULL;
+    size_t nfds = 0;
+    size_t i;
+
+    *nfdsret = 0;
+    *fdsret = NULL;
+
+    if (vshCommandOptString(cmd, "pass-fds", &fdopt) <= 0)
+        return 0;
+
+    if (!(fdlist = virStringSplit(fdopt, ",", -1))) {
+        vshError(ctl, _("Unable to split FD list '%s'"), fdopt);
+        return -1;
+    }
+
+    for (i = 0; fdlist[i] != NULL; i++) {
+        int fd;
+        if (virStrToLong_i(fdlist[i], NULL, 10, &fd) < 0) {
+            vshError(ctl, _("Unable to parse FD number '%s'"), fdlist[i]);
+            goto error;
+        }
+        if (VIR_EXPAND_N(fds, nfds, 1) < 0) {
+            vshError(ctl, "%s", _("Unable to allocate FD list"));
+            goto error;
+        }
+        fds[nfds - 1] = fd;
+    }
+
+    virStringFreeList(fdlist);
+
+    *fdsret = fds;
+    *nfdsret = nfds;
+    return 0;
+
+error:
+    virStringFreeList(fdlist);
+    VIR_FREE(fds);
+    return -1;
+}
 
 static bool
 cmdStart(vshControl *ctl, const vshCmd *cmd)
@@ -3270,6 +3322,8 @@ cmdStart(vshControl *ctl, const vshCmd *cmd)
 #endif
     unsigned int flags = VIR_DOMAIN_NONE;
     int rc;
+    size_t nfds = 0;
+    int *fds = NULL;
 
     if (!(dom = vshCommandOptDomainBy(ctl, cmd, NULL,
                                       VSH_BYNAME | VSH_BYUUID)))
@@ -3280,6 +3334,9 @@ cmdStart(vshControl *ctl, const vshCmd *cmd)
         virDomainFree(dom);
         return false;
     }
+
+    if (cmdStartGetFDs(ctl, cmd, &nfds, &fds) < 0)
+        return false;
 
     if (vshCommandOptBool(cmd, "paused"))
         flags |= VIR_DOMAIN_START_PAUSED;
@@ -3292,7 +3349,9 @@ cmdStart(vshControl *ctl, const vshCmd *cmd)
 
     /* We can emulate force boot, even for older servers that reject it.  */
     if (flags & VIR_DOMAIN_START_FORCE_BOOT) {
-        if (virDomainCreateWithFlags(dom, flags) == 0)
+        if ((nfds ?
+             virDomainCreateWithFiles(dom, nfds, fds, flags) :
+             virDomainCreateWithFlags(dom, flags)) == 0)
             goto started;
         if (last_error->code != VIR_ERR_NO_SUPPORT &&
             last_error->code != VIR_ERR_INVALID_ARG) {
@@ -3314,8 +3373,9 @@ cmdStart(vshControl *ctl, const vshCmd *cmd)
     }
 
     /* Prefer older API unless we have to pass a flag.  */
-    if ((flags ? virDomainCreateWithFlags(dom, flags)
-         : virDomainCreate(dom)) < 0) {
+    if ((nfds ? virDomainCreateWithFiles(dom, nfds, fds, flags) :
+         (flags ? virDomainCreateWithFlags(dom, flags)
+          : virDomainCreate(dom))) < 0) {
         vshError(ctl, _("Failed to start domain %s"), virDomainGetName(dom));
         goto cleanup;
     }
@@ -3332,6 +3392,7 @@ started:
 
 cleanup:
     virDomainFree(dom);
+    VIR_FREE(fds);
     return ret;
 }
 
@@ -4647,7 +4708,8 @@ static const vshCmdOptDef opts_shutdown[] = {
     },
     {.name = "mode",
      .type = VSH_OT_STRING,
-     .help = N_("shutdown mode: acpi|agent|initctl|signal")
+     .help = N_("shutdown mode: acpi|agent|initctl|signal"),
+     .completer = vshRebootShutdownModeCompleter
     },
     {.name = NULL}
 };
@@ -4733,7 +4795,8 @@ static const vshCmdOptDef opts_reboot[] = {
     },
     {.name = "mode",
      .type = VSH_OT_STRING,
-     .help = N_("shutdown mode: acpi|agent|initctl|signal")
+     .help = N_("shutdown mode: acpi|agent|initctl|signal"),
+     .completer = vshRebootShutdownModeCompleter
     },
     {.name = NULL}
 };
@@ -6398,6 +6461,10 @@ static const vshCmdOptDef opts_create[] = {
      .type = VSH_OT_BOOL,
      .help = N_("automatically destroy the guest when virsh disconnects")
     },
+    {.name = "pass-fds",
+     .type = VSH_OT_STRING,
+     .help = N_("pass file descriptors N,M,... to the guest")
+    },
     {.name = NULL}
 };
 
@@ -6412,6 +6479,8 @@ cmdCreate(vshControl *ctl, const vshCmd *cmd)
     bool console = vshCommandOptBool(cmd, "console");
 #endif
     unsigned int flags = VIR_DOMAIN_NONE;
+    size_t nfds = 0;
+    int *fds = NULL;
 
     if (vshCommandOptStringReq(ctl, cmd, "file", &from) < 0)
         return false;
@@ -6419,12 +6488,18 @@ cmdCreate(vshControl *ctl, const vshCmd *cmd)
     if (virFileReadAll(from, VSH_MAX_XML_FILE, &buffer) < 0)
         return false;
 
+    if (cmdStartGetFDs(ctl, cmd, &nfds, &fds) < 0)
+        return false;
+
     if (vshCommandOptBool(cmd, "paused"))
         flags |= VIR_DOMAIN_START_PAUSED;
     if (vshCommandOptBool(cmd, "autodestroy"))
         flags |= VIR_DOMAIN_START_AUTODESTROY;
 
-    dom = virDomainCreateXML(ctl->conn, buffer, flags);
+    if (nfds)
+        dom = virDomainCreateXMLWithFiles(ctl->conn, buffer, nfds, fds, flags);
+    else
+        dom = virDomainCreateXML(ctl->conn, buffer, flags);
     VIR_FREE(buffer);
 
     if (dom != NULL) {
@@ -6439,6 +6514,7 @@ cmdCreate(vshControl *ctl, const vshCmd *cmd)
         vshError(ctl, _("Failed to create domain from %s"), from);
         ret = false;
     }
+    VIR_FREE(fds);
     return ret;
 }
 
@@ -9793,8 +9869,10 @@ vshPrepareDiskXML(xmlNodePtr disk_node,
 
             if (source) {
                 new_node = xmlNewNode(NULL, BAD_CAST "source");
-                xmlNewProp(new_node, (const xmlChar *)disk_type,
-                           (const xmlChar *)source);
+                if (STREQ(disk_type, "block"))
+                    xmlNewProp(new_node, BAD_CAST "dev", BAD_CAST source);
+                else
+                    xmlNewProp(new_node, BAD_CAST disk_type, BAD_CAST source);
                 xmlAddChild(disk_node, new_node);
             } else if (type == VSH_PREPARE_DISK_XML_INSERT) {
                 vshError(NULL, _("No source is specified for inserting media"));
@@ -10240,37 +10318,43 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdAttachDevice,
      .opts = opts_attach_device,
      .info = info_attach_device,
-     .flags = 0
+     .flags = 0,
     },
     {.name = "attach-disk",
      .handler = cmdAttachDisk,
      .opts = opts_attach_disk,
      .info = info_attach_disk,
-     .flags = 0
+     .flags = 0,
     },
     {.name = "attach-interface",
      .handler = cmdAttachInterface,
      .opts = opts_attach_interface,
      .info = info_attach_interface,
-     .flags = 0
+     .flags = 0,
     },
     {.name = "autostart",
      .handler = cmdAutostart,
      .opts = opts_autostart,
      .info = info_autostart,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "blkdeviotune",
      .handler = cmdBlkdeviotune,
      .opts = opts_blkdeviotune,
      .info = info_blkdeviotune,
-     .flags = 0
+     .flags = 0,
     },
     {.name = "blkiotune",
      .handler = cmdBlkiotune,
      .opts = opts_blkiotune,
      .info = info_blkiotune,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "blockcommit",
      .handler = cmdBlockCommit,
@@ -10313,7 +10397,10 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdConsole,
      .opts = opts_console,
      .info = info_console,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
 #endif
     {.name = "cpu-baseline",
@@ -10350,15 +10437,18 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdDesc,
      .opts = opts_desc,
      .info = info_desc,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "destroy",
      .handler = cmdDestroy,
      .opts = opts_destroy,
      .info = info_destroy,
+     .flags = 0,
      .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE,
-     .flags = 0
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "detach-device",
      .handler = cmdDetachDevice,
@@ -10382,25 +10472,37 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdDomDisplay,
      .opts = opts_domdisplay,
      .info = info_domdisplay,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "domfstrim",
      .handler = cmdDomFSTrim,
      .opts = opts_domfstrim,
      .info = info_domfstrim,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "domhostname",
      .handler = cmdDomHostname,
      .opts = opts_domhostname,
      .info = info_domhostname,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "domid",
      .handler = cmdDomid,
      .opts = opts_domid,
      .info = info_domid,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "domif-setlink",
      .handler = cmdDomIfSetLink,
@@ -10418,37 +10520,50 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdDomjobabort,
      .opts = opts_domjobabort,
      .info = info_domjobabort,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "domjobinfo",
      .handler = cmdDomjobinfo,
      .opts = opts_domjobinfo,
      .info = info_domjobinfo,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "domname",
      .handler = cmdDomname,
      .opts = opts_domname,
      .info = info_domname,
-     .flags = 0
+     .flags = 0,
+     /* TODO: vshDomainIdCompleter ??? */
     },
     {.name = "dompmsuspend",
      .handler = cmdDomPMSuspend,
      .opts = opts_dom_pm_suspend,
      .info = info_dom_pm_suspend,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_RUNNING
     },
     {.name = "dompmwakeup",
      .handler = cmdDomPMWakeup,
      .opts = opts_dom_pm_wakeup,
      .info = info_dom_pm_wakeup,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "domuuid",
      .handler = cmdDomuuid,
      .opts = opts_domuuid,
      .info = info_domuuid,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "domxml-from-native",
      .handler = cmdDomXMLFromNative,
@@ -10466,31 +10581,46 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdDump,
      .opts = opts_dump,
      .info = info_dump,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_RUNNING
     },
     {.name = "dumpxml",
      .handler = cmdDumpXML,
      .opts = opts_dumpxml,
      .info = info_dumpxml,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "edit",
      .handler = cmdEdit,
      .opts = opts_edit,
      .info = info_edit,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "inject-nmi",
      .handler = cmdInjectNMI,
      .opts = opts_inject_nmi,
      .info = info_inject_nmi,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_RUNNING
     },
     {.name = "send-key",
      .handler = cmdSendKey,
      .opts = opts_send_key,
      .info = info_send_key,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_RUNNING
     },
     {.name = "send-process-signal",
      .handler = cmdSendProcessSignal,
@@ -10502,19 +10632,29 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdLxcEnterNamespace,
      .opts = opts_lxc_enter_namespace,
      .info = info_lxc_enter_namespace,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "managedsave",
      .handler = cmdManagedSave,
      .opts = opts_managedsave,
      .info = info_managedsave,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_RUNNING |
+                        VIR_CONNECT_LIST_DOMAINS_NO_MANAGEDSAVE
     },
     {.name = "managedsave-remove",
      .handler = cmdManagedSaveRemove,
      .opts = opts_managedsaveremove,
      .info = info_managedsaveremove,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_INACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_MANAGEDSAVE
     },
     {.name = "maxvcpus",
      .handler = cmdMaxvcpus,
@@ -10526,43 +10666,61 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdMemtune,
      .opts = opts_memtune,
      .info = info_memtune,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "migrate",
      .handler = cmdMigrate,
      .opts = opts_migrate,
      .info = info_migrate,
-     .flags = 0
+     .flags = 0,
     },
     {.name = "migrate-setmaxdowntime",
      .handler = cmdMigrateSetMaxDowntime,
      .opts = opts_migrate_setmaxdowntime,
      .info = info_migrate_setmaxdowntime,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "migrate-compcache",
      .handler = cmdMigrateCompCache,
      .opts = opts_migrate_compcache,
      .info = info_migrate_compcache,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_RUNNING
     },
     {.name = "migrate-setspeed",
      .handler = cmdMigrateSetMaxSpeed,
      .opts = opts_migrate_setspeed,
      .info = info_migrate_setspeed,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "migrate-getspeed",
      .handler = cmdMigrateGetMaxSpeed,
      .opts = opts_migrate_getspeed,
      .info = info_migrate_getspeed,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "numatune",
      .handler = cmdNumatune,
      .opts = opts_numatune,
      .info = info_numatune,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "qemu-attach",
      .handler = cmdQemuAttach,
@@ -10574,25 +10732,35 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdQemuMonitorCommand,
      .opts = opts_qemu_monitor_command,
      .info = info_qemu_monitor_command,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "qemu-agent-command",
      .handler = cmdQemuAgentCommand,
      .opts = opts_qemu_agent_command,
      .info = info_qemu_agent_command,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "reboot",
      .handler = cmdReboot,
      .opts = opts_reboot,
      .info = info_reboot,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "reset",
      .handler = cmdReset,
      .opts = opts_reset,
      .info = info_reset,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "restore",
      .handler = cmdRestore,
@@ -10604,7 +10772,10 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdResume,
      .opts = opts_resume,
      .info = info_resume,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_PAUSED
     },
     {.name = "save",
      .handler = cmdSave,
@@ -10634,37 +10805,49 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdSchedinfo,
      .opts = opts_schedinfo,
      .info = info_schedinfo,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "screenshot",
      .handler = cmdScreenshot,
      .opts = opts_screenshot,
      .info = info_screenshot,
-     .flags = 0
+     .flags = 0,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "setmaxmem",
      .handler = cmdSetmaxmem,
      .opts = opts_setmaxmem,
      .info = info_setmaxmem,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "setmem",
      .handler = cmdSetmem,
      .opts = opts_setmem,
      .info = info_setmem,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "setvcpus",
      .handler = cmdSetvcpus,
      .opts = opts_setvcpus,
      .info = info_setvcpus,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "shutdown",
      .handler = cmdShutdown,
      .opts = opts_shutdown,
      .info = info_shutdown,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "start",
      .handler = cmdStart,
@@ -10679,19 +10862,26 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdSuspend,
      .opts = opts_suspend,
      .info = info_suspend,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "ttyconsole",
      .handler = cmdTTYConsole,
      .opts = opts_ttyconsole,
      .info = info_ttyconsole,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "undefine",
      .handler = cmdUndefine,
      .opts = opts_undefine,
      .info = info_undefine,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "update-device",
      .handler = cmdUpdateDevice,
@@ -10703,31 +10893,45 @@ const vshCmdDef domManagementCmds[] = {
      .handler = cmdVcpucount,
      .opts = opts_vcpucount,
      .info = info_vcpucount,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "vcpuinfo",
      .handler = cmdVcpuinfo,
      .opts = opts_vcpuinfo,
      .info = info_vcpuinfo,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "vcpupin",
      .handler = cmdVcpuPin,
      .opts = opts_vcpupin,
      .info = info_vcpupin,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "emulatorpin",
      .handler = cmdEmulatorPin,
      .opts = opts_emulatorpin,
      .info = info_emulatorpin,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "vncdisplay",
      .handler = cmdVNCDisplay,
      .opts = opts_vncdisplay,
      .info = info_vncdisplay,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = NULL}
 };

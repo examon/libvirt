@@ -202,9 +202,9 @@ struct _vshCmdDef {
     bool (*handler) (vshControl *, const vshCmd *);    /* command handler */
     const vshCmdOptDef *opts;   /* definition of command options */
     const vshCmdInfo *info;     /* details about command */
+    unsigned int flags;         /* bitwise OR of VSH_CMD_FLAG */
     vshCmdCompleter completer;  /* command completer */
     unsigned int completer_flags;   /* command completer flags */
-    unsigned int flags;         /* bitwise OR of VSH_CMD_FLAG */
 };
 
 /*
@@ -255,7 +255,8 @@ struct _vshCmdGrp {
 };
 
 char **vshDomainCompleter(unsigned int flags);
-char **vshTestOptCompleter(void);
+char **vshDomPmSuspendTargetCompleter(void);
+char **vshRebootShutdownModeCompleter(void);
 
 
 void vshError(vshControl *ctl, const char *format, ...)
