@@ -1171,7 +1171,7 @@ const vshCmdDef networkCmds[] = {
      .handler = cmdNetworkInfo,
      .opts = opts_network_info,
      .info = info_network_info,
-     .flags = 0
+     .flags = 0,
     },
     {.name = "net-list",
      .handler = cmdNetworkList,

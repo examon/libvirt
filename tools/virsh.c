@@ -2286,7 +2286,7 @@ char **
 vshDomPmSuspendTargetCompleter(void)
 {
     const char *targets[] = {"mem", "disk", "hybrid"};
-    const unsigned int targets_size = sizeof(targets)/sizeof(targets[0]);
+    const unsigned int targets_size = ARRAY_CARDINALITY(targets);
     char **names = NULL;
     size_t i;
 
@@ -2843,13 +2843,14 @@ vshCurrentCmd(void)
                 if (VIR_STRDUP(rl_copy, rl_line_buffer) < 0)
                     return NULL;
 
-                pch = strtok(rl_copy, " ");
+                char *saveptr;
+                pch = strtok_r(rl_copy, " ", &saveptr);
 
                 while (pch != NULL) {
                     if (STREQ(pch, name))
                         if (VIR_STRDUP(found_cmd, name) < 0)
                             goto cleanup;
-                    pch = strtok(NULL, " ");
+                    pch = strtok_r(NULL, " ", &saveptr);
                 }
             }
         } else {
@@ -2864,8 +2865,7 @@ vshCurrentCmd(void)
     return found_cmd;
 
 cleanup:
-    if (rl_copy)
-        VIR_FREE(rl_copy);
+    VIR_FREE(rl_copy);
     return NULL;
 }
 

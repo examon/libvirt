@@ -1874,11 +1874,13 @@ cleanup:
 #undef FILTER
 
 const vshCmdDef domMonitoringCmds[] = {
-    {.name = "dombblkerror",
+    {.name = "domblkerror",
      .handler = cmdDomBlkError,
      .opts = opts_domblkerror,
      .info = info_domblkerror,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "domblkinfo",
      .handler = cmdDomblkinfo,
@@ -1890,7 +1892,10 @@ const vshCmdDef domMonitoringCmds[] = {
      .handler = cmdDomblklist,
      .opts = opts_domblklist,
      .info = info_domblklist,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "domblkstat",
      .handler = cmdDomblkstat,
@@ -1902,7 +1907,9 @@ const vshCmdDef domMonitoringCmds[] = {
      .handler = cmdDomControl,
      .opts = opts_domcontrol,
      .info = info_domcontrol,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "domif-getlink",
      .handler = cmdDomIfGetLink,
@@ -1914,7 +1921,10 @@ const vshCmdDef domMonitoringCmds[] = {
      .handler = cmdDomiflist,
      .opts = opts_domiflist,
      .info = info_domiflist,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "domifstat",
      .handler = cmdDomIfstat,
@@ -1926,19 +1936,27 @@ const vshCmdDef domMonitoringCmds[] = {
      .handler = cmdDominfo,
      .opts = opts_dominfo,
      .info = info_dominfo,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "dommemstat",
      .handler = cmdDomMemStat,
      .opts = opts_dommemstat,
      .info = info_dommemstat,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "domstate",
-     .handler = cmdDomstate,
+     .handler = cmdDomstate ,
      .opts = opts_domstate,
      .info = info_domstate,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "list",
      .handler = cmdList,
