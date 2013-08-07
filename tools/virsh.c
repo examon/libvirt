@@ -2283,7 +2283,7 @@ cleanup:
 }
 
 char **
-vshDomPmSuspendTargetCompleter(void)
+vshSuspendTargetCompleter(unsigned int flags ATTRIBUTE_UNUSED)
 {
     const char *targets[] = {"mem", "disk", "hybrid"};
     const unsigned int targets_size = ARRAY_CARDINALITY(targets);
@@ -2311,10 +2311,10 @@ cleanup:
 }
 
 char **
-vshRebootShutdownModeCompleter(void)
+vshRebootShutdownModeCompleter(unsigned int flags ATTRIBUTE_UNUSED)
 {
     const char *modes[] = {"acpi", "agent", "initctl", "signal"};
-    const unsigned int modes_size = sizeof(modes)/sizeof(modes[0]);
+    const unsigned int modes_size = ARRAY_CARDINALITY(modes);
     char **names = NULL;
     size_t i;
 
@@ -2794,7 +2794,7 @@ vshReadlineOptionsCompletionGenerator(const char *text ATTRIBUTE_UNUSED,
     if (!opt->completer)
         return NULL;
 
-    completed_names = opt->completer();
+    completed_names = opt->completer(opt->completer_flags);
 
     if (!completed_names)
         return NULL;
@@ -2984,7 +2984,7 @@ vshCurrentOptCom(const char *cmd_name)
     if (!opt->completer)
         return NULL;
 
-    completed_names = opt->completer();
+    completed_names = opt->completer(opt->completer_flags);
 
     if (!completed_names)
         return NULL;
@@ -3040,7 +3040,7 @@ vshReadlineCompletion(const char *text, int start, int end ATTRIBUTE_UNUSED)
             if (!matches)
                 matches = rl_completion_matches(text, vshReadlineOptionsCompletionGenerator);
             if (!matches)
-                    matches = rl_completion_matches(text, vshReadlineOptionsGenerator);
+                matches = rl_completion_matches(text, vshReadlineOptionsGenerator);
         } else if (!cmd_com && opt && opt_com) {
             matches = rl_completion_matches(text, vshReadlineOptionsGenerator);
         } else if (cmd_com && opt && opt_com) {

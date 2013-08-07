@@ -2753,7 +2753,7 @@ static const vshCmdOptDef opts_dom_pm_suspend[] = {
      .help = N_("mem(Suspend-to-RAM), "
                 "disk(Suspend-to-Disk), "
                 "hybrid(Hybrid-Suspend)"),
-     .completer = vshDomPmSuspendTargetCompleter
+     .completer = vshSuspendTargetCompleter
     },
     {.name = NULL}
 };
@@ -7892,10 +7892,10 @@ static const vshCmdInfo info_lxc_enter_namespace[] = {
 };
 
 static const vshCmdOptDef opts_lxc_enter_namespace[] = {
-    {"domain", VSH_OT_DATA, VSH_OFLAG_REQ, N_("domain name, id or uuid"), NULL},
-    {"noseclabel", VSH_OT_BOOL, 0, N_("Do not change process security label"), NULL},
-    {"cmd", VSH_OT_ARGV, VSH_OFLAG_REQ, N_("namespace"), NULL},
-    {NULL, 0, 0, NULL, NULL}
+    {"domain", VSH_OT_DATA, VSH_OFLAG_REQ, N_("domain name, id or uuid"), NULL, 0},
+    {"noseclabel", VSH_OT_BOOL, 0, N_("Do not change process security label"), NULL, 0},
+    {"cmd", VSH_OT_ARGV, VSH_OFLAG_REQ, N_("namespace"), NULL, 0},
+    {NULL, 0, 0, NULL, NULL, 0}
 };
 
 static bool
@@ -10279,7 +10279,7 @@ static const vshCmdOptDef opts_domfstrim[] = {
      .type = VSH_OT_DATA,
      .help = N_("which mount point to trim")
     },
-    {NULL, 0, 0, NULL, NULL}
+    {NULL, 0, 0, NULL, NULL, 0}
 };
 static bool
 cmdDomFSTrim(vshControl *ctl, const vshCmd *cmd)

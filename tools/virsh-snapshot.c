@@ -2012,61 +2012,91 @@ const vshCmdDef snapshotCmds[] = {
      .handler = cmdSnapshotCreate,
      .opts = opts_snapshot_create,
      .info = info_snapshot_create,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshot-create-as",
      .handler = cmdSnapshotCreateAs,
      .opts = opts_snapshot_create_as,
      .info = info_snapshot_create_as,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshot-current",
      .handler = cmdSnapshotCurrent,
      .opts = opts_snapshot_current,
      .info = info_snapshot_current,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshot-delete",
      .handler = cmdSnapshotDelete,
      .opts = opts_snapshot_delete,
      .info = info_snapshot_delete,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshot-dumpxml",
      .handler = cmdSnapshotDumpXML,
      .opts = opts_snapshot_dumpxml,
      .info = info_snapshot_dumpxml,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshot-edit",
      .handler = cmdSnapshotEdit,
      .opts = opts_snapshot_edit,
      .info = info_snapshot_edit,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshot-info",
      .handler = cmdSnapshotInfo,
      .opts = opts_snapshot_info,
      .info = info_snapshot_info,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshot-list",
      .handler = cmdSnapshotList,
      .opts = opts_snapshot_list,
      .info = info_snapshot_list,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshot-parent",
      .handler = cmdSnapshotParent,
      .opts = opts_snapshot_parent,
      .info = info_snapshot_parent,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshot-revert",
      .handler = cmdDomainSnapshotRevert,
      .opts = opts_snapshot_revert,
      .info = info_snapshot_revert,
-     .flags = 0
+     .flags = 0,
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = NULL}
 };

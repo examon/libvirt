@@ -147,7 +147,7 @@ typedef struct _vshControl vshControl;
 typedef struct _vshCtrlData vshCtrlData;
 
 typedef char **(*vshCmdCompleter)(unsigned int flags);
-typedef char **(*vshOptCompleter)(void);
+typedef char **(*vshOptCompleter)(unsigned int flags);
 
 /*
  * vshCmdInfo -- name/value pair for information about command
@@ -171,6 +171,7 @@ struct _vshCmdOptDef {
     const char *help;           /* non-NULL help string; or for VSH_OT_ALIAS
                                  * the name of a later public option */
     vshOptCompleter completer;  /* option completer */
+    unsigned int completer_flags;   /* option completer flags */
 
 };
 
@@ -255,8 +256,8 @@ struct _vshCmdGrp {
 };
 
 char **vshDomainCompleter(unsigned int flags);
-char **vshDomPmSuspendTargetCompleter(void);
-char **vshRebootShutdownModeCompleter(void);
+char **vshSuspendTargetCompleter(unsigned int flags);
+char **vshRebootShutdownModeCompleter(unsigned int flags);
 
 
 void vshError(vshControl *ctl, const char *format, ...)

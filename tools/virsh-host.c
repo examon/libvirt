@@ -488,7 +488,7 @@ static const vshCmdOptDef opts_node_suspend[] = {
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
      .help = N_("mem(Suspend-to-RAM), "
-                "disk(Suspend-to-Disk), hybrid(Hybrid-Suspend)")
+                "disk(Suspend-to-Disk), hybrid(Hybrid-Suspend)"),
     },
     {.name = "duration",
      .type = VSH_OT_INT,
