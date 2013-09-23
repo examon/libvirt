@@ -125,7 +125,10 @@ static const vshCmdOptDef opts_snapshot_create[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "xmlfile",
      .type = VSH_OT_DATA,
@@ -261,10 +264,7 @@ vshParseSnapshotMemspec(vshControl *ctl, virBufferPtr buf, const char *str)
 cleanup:
     if (ret < 0)
         vshError(ctl, _("unable to parse memspec: %s"), str);
-    if (array) {
-        VIR_FREE(*array);
-        VIR_FREE(array);
-    }
+    virStringFreeList(array);
     return ret;
 }
 
@@ -313,10 +313,7 @@ vshParseSnapshotDiskspec(vshControl *ctl, virBufferPtr buf, const char *str)
 cleanup:
     if (ret < 0)
         vshError(ctl, _("unable to parse diskspec: %s"), str);
-    if (array) {
-        VIR_FREE(*array);
-        VIR_FREE(array);
-    }
+    virStringFreeList(array);
     return ret;
 }
 
@@ -334,7 +331,10 @@ static const vshCmdOptDef opts_snapshot_create_as[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "name",
      .type = VSH_OT_DATA,
@@ -526,7 +526,10 @@ static const vshCmdOptDef opts_snapshot_edit[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshotname",
      .type = VSH_OT_DATA,
@@ -648,7 +651,10 @@ static const vshCmdOptDef opts_snapshot_current[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "name",
      .type = VSH_OT_BOOL,
@@ -884,7 +890,10 @@ static const vshCmdOptDef opts_snapshot_info[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshotname",
      .type = VSH_OT_DATA,
@@ -1441,7 +1450,10 @@ static const vshCmdOptDef opts_snapshot_list[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "parent",
      .type = VSH_OT_BOOL,
@@ -1705,7 +1717,10 @@ static const vshCmdOptDef opts_snapshot_dumpxml[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshotname",
      .type = VSH_OT_DATA,
@@ -1773,7 +1788,10 @@ static const vshCmdOptDef opts_snapshot_parent[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshotname",
      .type = VSH_OT_DATA,
@@ -1841,7 +1859,10 @@ static const vshCmdOptDef opts_snapshot_revert[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshotname",
      .type = VSH_OT_DATA,
@@ -1934,7 +1955,10 @@ static const vshCmdOptDef opts_snapshot_delete[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "snapshotname",
      .type = VSH_OT_DATA,
@@ -2012,91 +2036,61 @@ const vshCmdDef snapshotCmds[] = {
      .handler = cmdSnapshotCreate,
      .opts = opts_snapshot_create,
      .info = info_snapshot_create,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
+     .flags = 0
     },
     {.name = "snapshot-create-as",
      .handler = cmdSnapshotCreateAs,
      .opts = opts_snapshot_create_as,
      .info = info_snapshot_create_as,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
+     .flags = 0
     },
     {.name = "snapshot-current",
      .handler = cmdSnapshotCurrent,
      .opts = opts_snapshot_current,
      .info = info_snapshot_current,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
+     .flags = 0
     },
     {.name = "snapshot-delete",
      .handler = cmdSnapshotDelete,
      .opts = opts_snapshot_delete,
      .info = info_snapshot_delete,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
+     .flags = 0
     },
     {.name = "snapshot-dumpxml",
      .handler = cmdSnapshotDumpXML,
      .opts = opts_snapshot_dumpxml,
      .info = info_snapshot_dumpxml,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
+     .flags = 0
     },
     {.name = "snapshot-edit",
      .handler = cmdSnapshotEdit,
      .opts = opts_snapshot_edit,
      .info = info_snapshot_edit,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
+     .flags = 0
     },
     {.name = "snapshot-info",
      .handler = cmdSnapshotInfo,
      .opts = opts_snapshot_info,
      .info = info_snapshot_info,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
+     .flags = 0
     },
     {.name = "snapshot-list",
      .handler = cmdSnapshotList,
      .opts = opts_snapshot_list,
      .info = info_snapshot_list,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
+     .flags = 0
     },
     {.name = "snapshot-parent",
      .handler = cmdSnapshotParent,
      .opts = opts_snapshot_parent,
      .info = info_snapshot_parent,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
+     .flags = 0
     },
     {.name = "snapshot-revert",
      .handler = cmdDomainSnapshotRevert,
      .opts = opts_snapshot_revert,
      .info = info_snapshot_revert,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
+     .flags = 0
     },
     {.name = NULL}
 };

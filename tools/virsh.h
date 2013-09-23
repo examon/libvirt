@@ -1,7 +1,7 @@
 /*
  * virsh.h: a shell to exercise the libvirt API
  *
- * Copyright (C) 2005, 2007-2012 Red Hat, Inc.
+ * Copyright (C) 2005, 2007-2013 Red Hat, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -32,11 +32,13 @@
 # include <unistd.h>
 # include <sys/stat.h>
 # include <inttypes.h>
+# include <termios.h>
 
 # include "internal.h"
 # include "virerror.h"
 # include "virthread.h"
 # include "virnetdevbandwidth.h"
+# include "virstring.h"
 
 # define VSH_MAX_XML_FILE (10*1024*1024)
 
@@ -146,8 +148,7 @@ typedef struct _vshCmdOptDef vshCmdOptDef;
 typedef struct _vshControl vshControl;
 typedef struct _vshCtrlData vshCtrlData;
 
-typedef char **(*vshCmdCompleter)(unsigned int flags);
-typedef char **(*vshOptCompleter)(unsigned int flags);
+typedef char **(*vshCompleter)(unsigned int flags);
 
 /*
  * vshCmdInfo -- name/value pair for information about command
@@ -170,9 +171,8 @@ struct _vshCmdOptDef {
     unsigned int flags;         /* flags */
     const char *help;           /* non-NULL help string; or for VSH_OT_ALIAS
                                  * the name of a later public option */
-    vshOptCompleter completer;  /* option completer */
+    vshCompleter completer;         /* option completer */
     unsigned int completer_flags;   /* option completer flags */
-
 };
 
 /*
@@ -204,8 +204,6 @@ struct _vshCmdDef {
     const vshCmdOptDef *opts;   /* definition of command options */
     const vshCmdInfo *info;     /* details about command */
     unsigned int flags;         /* bitwise OR of VSH_CMD_FLAG */
-    vshCmdCompleter completer;  /* command completer */
-    unsigned int completer_flags;   /* command completer flags */
 };
 
 /*
@@ -247,6 +245,11 @@ struct _vshControl {
 
     const char *escapeChar;     /* String representation of
                                    console escape character */
+
+# ifndef WIN32
+    struct termios termattr;    /* settings of the tty terminal */
+# endif
+    bool istty;                 /* is the terminal a tty */
 };
 
 struct _vshCmdGrp {
@@ -256,9 +259,9 @@ struct _vshCmdGrp {
 };
 
 char **vshDomainCompleter(unsigned int flags);
-char **vshSuspendTargetCompleter(unsigned int flags);
-char **vshRebootShutdownModeCompleter(unsigned int flags);
-
+char **vshSuspendTargetCompleter(unsigned int unused_flags);
+char **vshRebootShutdownModeCompleter(unsigned int unused_flags);
+char **vshPoolCompleter(unsigned int unused_flags);
 
 void vshError(vshControl *ctl, const char *format, ...)
     ATTRIBUTE_FMT_PRINTF(2, 3);
@@ -274,9 +277,6 @@ bool vshCmddefHelp(vshControl *ctl, const char *name);
 const vshCmdGrp *vshCmdGrpSearch(const char *grpname);
 bool vshCmdGrpHelp(vshControl *ctl, const char *name);
 
-int vshCommandOpt(const vshCmd *cmd, const char *name, vshCmdOpt **opt)
-    ATTRIBUTE_NONNULL(1) ATTRIBUTE_NONNULL(2) ATTRIBUTE_NONNULL(3)
-    ATTRIBUTE_RETURN_CHECK;
 int vshCommandOptInt(const vshCmd *cmd, const char *name, int *value)
     ATTRIBUTE_NONNULL(3) ATTRIBUTE_RETURN_CHECK;
 int vshCommandOptUInt(const vshCmd *cmd, const char *name,
@@ -364,6 +364,12 @@ extern virErrorPtr last_error;
 void vshReportError(vshControl *ctl);
 void vshResetLibvirtError(void);
 void vshSaveLibvirtError(void);
+
+/* terminal modifications */
+bool vshTTYIsInterruptCharacter(vshControl *ctl, const char chr);
+int vshTTYDisableInterrupt(vshControl *ctl);
+int vshTTYRestore(vshControl *ctl);
+int vshTTYMakeRaw(vshControl *ctl, bool report_errors);
 
 /* allocation wrappers */
 void *_vshMalloc(vshControl *ctl, size_t sz, const char *filename, int line);

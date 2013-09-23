@@ -1686,7 +1686,8 @@ static const vshCmdOptDef opts_vol_key[] = {
     },
     {.name = "pool",
      .type = VSH_OT_STRING,
-     .help = N_("pool name or uuid")
+     .help = N_("pool name or uuid"),
+     .completer = vshPoolCompleter
     },
     {.name = NULL}
 };

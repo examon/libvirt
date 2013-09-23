@@ -228,8 +228,8 @@ vshDomainStateReasonToString(int state, int reason)
             return N_("shutting down");
         case VIR_DOMAIN_PAUSED_SNAPSHOT:
             return N_("creating snapshot");
-        case VIR_DOMAIN_PAUSED_GUEST_PANICKED:
-            return N_("guest panicked");
+        case VIR_DOMAIN_PAUSED_CRASHED:
+            return N_("crashed");
         case VIR_DOMAIN_PAUSED_UNKNOWN:
         case VIR_DOMAIN_PAUSED_LAST:
             ;
@@ -240,8 +240,6 @@ vshDomainStateReasonToString(int state, int reason)
         switch ((virDomainShutdownReason) reason) {
         case VIR_DOMAIN_SHUTDOWN_USER:
             return N_("user");
-        case VIR_DOMAIN_SHUTDOWN_CRASHED:
-            return N_("crashed");
         case VIR_DOMAIN_SHUTDOWN_UNKNOWN:
         case VIR_DOMAIN_SHUTDOWN_LAST:
             ;
@@ -312,7 +310,9 @@ static const vshCmdOptDef opts_dommemstat[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = "period",
      .type = VSH_OT_DATA,
@@ -436,7 +436,10 @@ static const vshCmdOptDef opts_domblkinfo[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "device",
      .type = VSH_OT_DATA,
@@ -491,7 +494,10 @@ static const vshCmdOptDef opts_domblklist[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "inactive",
      .type = VSH_OT_BOOL,
@@ -605,7 +611,10 @@ static const vshCmdOptDef opts_domiflist[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "inactive",
      .type = VSH_OT_BOOL,
@@ -710,7 +719,10 @@ static const vshCmdOptDef opts_domif_getlink[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "interface",
      .type = VSH_OT_DATA,
@@ -825,7 +837,9 @@ static const vshCmdOptDef opts_domcontrol[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = NULL}
 };
@@ -878,7 +892,10 @@ static const vshCmdOptDef opts_domblkstat[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_RUNNING
     },
     {.name = "device",
      .type = VSH_OT_DATA,
@@ -1061,7 +1078,10 @@ static const vshCmdOptDef opts_domifstat[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_RUNNING
     },
     {.name = "interface",
      .type = VSH_OT_DATA,
@@ -1138,7 +1158,9 @@ static const vshCmdOptDef opts_domblkerror[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id, or uuid")
+     .help = N_("domain name, id, or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
     },
     {.name = NULL}
 };
@@ -1203,7 +1225,10 @@ static const vshCmdOptDef opts_dominfo[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = NULL}
 };
@@ -1345,7 +1370,10 @@ static const vshCmdOptDef opts_domstate[] = {
     {.name = "domain",
      .type = VSH_OT_DATA,
      .flags = VSH_OFLAG_REQ,
-     .help = N_("domain name, id or uuid")
+     .help = N_("domain name, id or uuid"),
+     .completer = vshDomainCompleter,
+     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
+                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
     },
     {.name = "reason",
      .type = VSH_OT_BOOL,
@@ -1878,9 +1906,7 @@ const vshCmdDef domMonitoringCmds[] = {
      .handler = cmdDomBlkError,
      .opts = opts_domblkerror,
      .info = info_domblkerror,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
+     .flags = 0
     },
     {.name = "domblkinfo",
      .handler = cmdDomblkinfo,
@@ -1892,10 +1918,7 @@ const vshCmdDef domMonitoringCmds[] = {
      .handler = cmdDomblklist,
      .opts = opts_domblklist,
      .info = info_domblklist,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
+     .flags = 0
     },
     {.name = "domblkstat",
      .handler = cmdDomblkstat,
@@ -1907,9 +1930,7 @@ const vshCmdDef domMonitoringCmds[] = {
      .handler = cmdDomControl,
      .opts = opts_domcontrol,
      .info = info_domcontrol,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
+     .flags = 0
     },
     {.name = "domif-getlink",
      .handler = cmdDomIfGetLink,
@@ -1921,10 +1942,7 @@ const vshCmdDef domMonitoringCmds[] = {
      .handler = cmdDomiflist,
      .opts = opts_domiflist,
      .info = info_domiflist,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
+     .flags = 0
     },
     {.name = "domifstat",
      .handler = cmdDomIfstat,
@@ -1936,27 +1954,19 @@ const vshCmdDef domMonitoringCmds[] = {
      .handler = cmdDominfo,
      .opts = opts_dominfo,
      .info = info_dominfo,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
+     .flags = 0
     },
     {.name = "dommemstat",
      .handler = cmdDomMemStat,
      .opts = opts_dommemstat,
      .info = info_dommemstat,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE
+     .flags = 0
     },
     {.name = "domstate",
-     .handler = cmdDomstate ,
+     .handler = cmdDomstate,
      .opts = opts_domstate,
      .info = info_domstate,
-     .flags = 0,
-     .completer = vshDomainCompleter,
-     .completer_flags = VIR_CONNECT_LIST_DOMAINS_ACTIVE |
-                        VIR_CONNECT_LIST_DOMAINS_INACTIVE
+     .flags = 0
     },
     {.name = "list",
      .handler = cmdList,
